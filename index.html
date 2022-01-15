@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Motion Tracking</title>
+    <base href="./" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+      }
+      #canvas,
+      #video {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 48rem;
+        height: 36rem;
+        transform: translate(-50%, -50%);
+      }
+      #video {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <video id="video" width="768" height="576" autoplay></video>
+    <canvas id="canvas" width="768" height="576"></canvas>
+    <script src="./detection.js"></script>
+    <script>
+      ;(async function () {
+        // Formatted by StandardJS
+
+        const frameRate = 60 // 60 = requestAnimationFrame
+        const timeStep = 1 / frameRate
+
+        const video = document.getElementById('video')
+        const canvas = document.getElementById('canvas')
+        const context = canvas.getContext('2d')
+
+        const width = canvas.width
+        const height = canvas.height
+
+        let difference
+        let threshold
+        let rectangle
+        let box
+
+        async function setupVideo () {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: { width, height, frameRate }
+            })
+            video.srcObject = stream
+            video.onloadedmetadata = event => {
+              video.play()
+            }
+          } catch (error) {
+            console.error(error)
+          } finally {
+            requestAnimationFrame(loop)
+          }
+        }
+
+        function drawCrosshair (r) {
+          context.fillStyle = 'rgba(255, 255, 255, 1)'
+          context.strokeStyle = 'rgba(255, 255, 255, 1)'
+          context.setLineDash([2, 4])
+          context.lineWidth = 2
+
+          context.beginPath()
+          context.moveTo(r.x + r.w / 2, 0)
+          context.lineTo(r.x + r.w / 2, height)
+          context.stroke()
+
+          context.beginPath()
+          context.moveTo(0, r.y + r.h / 2)
+          context.lineTo(width, r.y + r.h / 2)
+          context.stroke()
+
+          context.beginPath()
+          context.arc(r.x + r.w / 2, r.y + r.h / 2, 4, 0, Math.PI * 2)
+          context.fill()
+        }
+
+        function drawBounds (r) {
+          context.globalCompositeOperation = 'overlay'
+
+          context.fillStyle = 'rgba(0, 0, 0, 0.5)'
+          context.strokeStyle = 'rgba(255, 255, 255, 1)'
+          context.setLineDash([])
+          context.lineWidth = 2
+
+          context.fillRect(r.x, r.y, r.w, r.h)
+          context.strokeRect(r.x, r.y, r.w, r.h)
+
+          context.globalCompositeOperation = 'source-over'
+        }
+
+        function update () {
+          const data = getData(video)
+
+          if (!store.data) store.data = data
+
+          difference = getDifference(data, store.data)
+          threshold = getThreshold(difference)
+          box = getBounds(difference, width, threshold)
+          rectangle = getAverageRectangle(box)
+
+          store.data = data
+        }
+
+        function render () {
+          drawData(context, difference, 0, 0, width, height)
+          drawCrosshair(rectangle)
+          drawBounds(rectangle)
+        }
+
+        function loop (time) {
+          if (frameRate === 60) {
+            requestAnimationFrame(loop)
+          } else {
+            setTimeout(() => {
+              loop(performance.now())
+            }, timeStep * 1000)
+          }
+
+          update(time)
+          render(time)
+        }
+
+        function main () {
+          window.onload = setupVideo
+        }
+
+        main()
+      })()
+    </script>
+  </body>
+</html>
